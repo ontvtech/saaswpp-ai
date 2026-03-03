@@ -1,0 +1,858 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =============================================================================
+// MODELO: Admin (Nível 0 - Super Admin)
+// =============================================================================
+model Admin {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// =============================================================================
+// MODELO: Reseller (Nível 1 - Revendedor)
+// =============================================================================
+model Reseller {
+  id              String     @id @default(uuid())
+  email           String     @unique
+  password        String
+  name            String
+  status          String     @default("active") // active, suspended, trial, grace_period
+  
+  // Documento (CPF ou CNPJ)
+  documentType    String?    // CPF ou CNPJ
+  documentNumber  String?    // Número do documento
+  
+  // Contato WhatsApp para notificações
+  whatsappNumber  String?    // Número para receber alertas (5511999999999)
+  notificationsEnabled Boolean @default(true)
+  notifyNewSale       Boolean @default(true)
+  notifyTrialExpiring Boolean @default(true)
+  notifySuspended     Boolean @default(true)
+  notifyActivated     Boolean @default(true)
+  notifyPaymentFailed Boolean @default(true)
+  
+  // Limites definidos pelo Admin
+  allowedModules  Json?      // ["ESSENTIAL", "SALES_PRO", "ELITE"]
+  maxTenants      Int        @default(10)
+  
+  // Financeiro
+  stripeKey           String?    // Chave Stripe própria do revendedor
+  stripeAccountId     String?    // Stripe Connect Account ID
+  stripeCustomerId    String?    // Cliente Stripe do revendedor
+  stripePaymentMethod String?    // Método de pagamento salvo
+  subscriptionId      String?    // ID da assinatura
+  commissionRate      Float      @default(0.20) // 20% de comissão
+  
+  // Zero Touch e Trial
+  zeroTouchEnabled    Boolean   @default(true)   // Aprovação automática de pagamentos
+  defaultTrialDays    Int       @default(7)      // Dias de trial para novos lojistas
+  
+  // Trial e Grace Period (para o próprio revendedor)
+  trialEndsAt         DateTime?
+  gracePeriodEndsAt   DateTime?   // Data fim do grace period
+  
+  // Plano
+  planId              String?
+  
+  // Relacionamentos
+  merchants       Merchant[]
+  
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+}
+
+// =============================================================================
+// MODELO: Merchant (Nível 2 - Lojista/Tenant)
+// =============================================================================
+model Merchant {
+  id                  String          @id @default(uuid())
+  name                String
+  email               String          @unique
+  password            String?
+  status              String          @default("trial") // active, suspended, trial, pending_verification, grace_period
+  
+  // Documento (CPF ou CNPJ) - Coletado no checkout
+  documentType       String?         // CPF ou CNPJ
+  documentNumber     String?         // Número do documento
+  phoneNumber        String?         // Telefone do lojista
+  
+  // Plano e Nicho
+  planId              String?
+  plan                Plan?           @relation(fields: [planId], references: [id])
+  nicheId             String?
+  niche               NicheTemplate?  @relation(fields: [nicheId], references: [id])
+  resellerId          String?
+  
+  // Módulos Ativos (Herdados do Plano + Revendedor)
+  activeModules       Json?           // ["ESSENTIAL", "SALES_PRO"]
+  
+  // Modo de operação da IA
+  mindset             String          @default("GROUNDING") // GROUNDING, CONSULTANT
+  
+  // Trial e Grace Period
+  trialEndsAt         DateTime?
+  gracePeriodEndsAt   DateTime?        // Período de carência antes de suspender
+  
+  // Limites e Uso
+  tokenQuota          Int             @default(50000)
+  tokenUsage          Int             @default(0)
+  
+  // Relacionamento com Revendedor
+  resellerId          String?
+  reseller            Reseller?       @relation(fields: [resellerId], references: [id])
+  
+  // Stripe
+  stripeCustomerId    String?
+  stripePaymentMethod String?
+  subscriptionId      String?
+  stripeCheckoutSession String?    // ID da sessão de checkout
+  verificationCode    String?
+  
+  // WhatsApp - Evolution API
+  evolutionInstance   String?         @unique
+  evolutionApiKey     String?
+  
+  // WhatsApp - Meta API
+  whatsappApiType     String          @default("EVOLUTION") // EVOLUTION, META
+  metaAccessToken     String?
+  metaPhoneNumberId   String?
+  metaWabaId          String?
+  metaVerifyToken     String?
+  
+  // Configuração de IA
+  aiConfig            Json?           // { name, tone, prompt }
+  
+  // Controle de Pausa Manual
+  lastManualMessageAt DateTime?
+  
+  // Relacionamentos
+  knowledgeBase       KnowledgeBase[]
+  interactionLogs     InteractionLog[]
+  auditLogs           AuditLog[]
+  chatSessions        ChatSession[]
+  
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+}
+
+// =============================================================================
+// MODELO: Plan (Planos de Assinatura)
+// =============================================================================
+model Plan {
+  id            String     @id @default(uuid())
+  name          String     @unique
+  description   String?
+  price         Float
+  type          String     @default("MERCHANT") // MERCHANT, RESELLER
+  
+  // Limites
+  maxTenants    Int        @default(0)      // Para RESELLER
+  maxMessages   Int        @default(1000)
+  tokenLimit    Int        @default(50000)
+  instanceLimit Int        @default(1)
+  
+  // Módulos incluídos no plano
+  modules       Json?      // { ESSENTIAL: true, SALES_PRO: true, PREDICTIVE: false, ELITE: false }
+  
+  // Integração Stripe
+  stripePriceId String?
+  
+  // Relacionamentos
+  merchants     Merchant[]
+  
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+}
+
+// =============================================================================
+// MODELO: NicheTemplate (Templates de Prompt por Nicho)
+// =============================================================================
+model NicheTemplate {
+  id          String     @id @default(uuid())
+  name        String     @unique
+  basePrompt  String
+  
+  // Relacionamentos
+  merchants   Merchant[]
+  
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
+
+// =============================================================================
+// MODELO: ChatSession (Sessões de Chat por Tenant)
+// =============================================================================
+model ChatSession {
+  id          String    @id @default(uuid())
+  merchantId  String
+  merchant    Merchant  @relation(fields: [merchantId], references: [id])
+  
+  // Telefone do cliente
+  sender      String
+  
+  // Estado da conversa
+  state       String    @default("IDLE") // IDLE, AI_ACTIVE, SCHEDULE_PENDING, HUMAN_HANDOFF, PAUSED
+  pausedUntil DateTime?
+  
+  // Contexto da conversa
+  context     Json?     // { intent, lastProduct, appointmentIntent }
+  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  @@unique([merchantId, sender])
+}
+
+// =============================================================================
+// MODELO: AuditLog (Logs de Auditoria)
+// =============================================================================
+model AuditLog {
+  id          String    @id @default(uuid())
+  
+  // Relacionamentos
+  merchantId  String?
+  merchant    Merchant? @relation(fields: [merchantId], references: [id])
+  resellerId  String?
+  
+  // Dados do Log
+  action      String    // CONFIG_UPDATE, INSTANCE_DELETE, LOGIN, etc.
+  details     String?   // JSON ou descrição
+  ipAddress   String?
+  
+  createdAt   DateTime  @default(now())
+}
+
+// =============================================================================
+// MODELO: GlobalConfig (Configuração Global do Sistema)
+// =============================================================================
+model GlobalConfig {
+  id                  String   @id @default("singleton")
+  
+  // === IDENTIDADE DA PLATAFORMA ===
+  // URL é AUTOMÁTICA via ENV (PLATFORM_URL), padrão: https://saaswpp.work
+  platformName        String?  @default("SaaSWPP")        // Nome da plataforma
+  supportEmail        String?  @default("suporte@saaswpp.work")
+  supportWhatsapp     String?  // WhatsApp de suporte (5511999999999)
+  
+  // === TRIALS ===
+  trialEnabled        Boolean  @default(true)
+  trialDefaultDays    Int      @default(7)
+  
+  // === GRACE PERIOD ===
+  gracePeriodEnabled     Boolean  @default(true)           // Grace period ativo
+  gracePeriodDays        Int      @default(5)              // Dias de grace period
+  gracePeriodFinalHours  Int      @default(48)             // Horas finais após grace
+  
+  // === STRIPE ===
+  stripeSecretKey     String?
+  stripePublicKey     String?
+  stripeWebhookSecret String?
+  
+  // === POOL DE IA ===
+  aiPoolMode          String   @default("SIMULTANEOUS") // SEQUENTIAL, FALLBACK, SIMULTANEOUS
+  aiPoolMaxKeys       Int      @default(100)            // Máximo de chaves no pool
+  aiPoolDefaultProvider String @default("GLM")          // Provider padrão
+  
+  // === MENSAGENS AUTOMÁTICAS DO GRACE PERIOD ===
+  graceMessageDay1    String?  // Mensagem dia 1 (falha pagamento)
+  graceMessageDay2    String?  // Mensagem dia 2
+  graceMessageDay3    String?  // Mensagem dia 3
+  graceMessageDay4    String?  // Mensagem dia 4
+  graceMessageDay5    String?  // Mensagem dia 5 (último aviso 48h)
+  graceMessageSuspended String? // Mensagem pós-suspensão
+  
+  updatedAt           DateTime @updatedAt
+}
+
+// =============================================================================
+// MODELO: TrialLink (Links de Trial)
+// =============================================================================
+model TrialLink {
+  id            String    @id @default(uuid())
+  code          String    @unique
+  days          Int       @default(7)
+  tokenLimit    Int       @default(50000)
+  instanceLimit Int       @default(1)
+  expiresAt     DateTime?
+  used          Boolean   @default(false)
+  usedBy        String?   // Merchant ID
+  
+  createdAt     DateTime  @default(now())
+}
+
+// =============================================================================
+// MODELO: AiKey (Pool de Chaves de IA)
+// =============================================================================
+model AiKey {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  provider    String   @default("GEMINI") // GEMINI, OPENAI, ANTHROPIC, GLM, DEEPSEEK
+  tier        String   @default("BASIC")  // BASIC, PREMIUM, ENTERPRISE
+  status      String   @default("active") // active, exhausted, error, paused
+  
+  // Modelo específico (opcional)
+  model       String?  // gemini-2.0-flash-lite, gpt-4o-mini, glm-4-flash, etc.
+  
+  // Limites e Uso
+  tokenLimit     Int   @default(1000000)
+  tokensUsed     Int   @default(0)
+  requestLimit   Int   @default(10000)
+  requestsUsed   Int   @default(0)
+  
+  // Estatísticas
+  usageCount     Int   @default(0)
+  totalRequests  Int   @default(0)
+  totalTokens    Int   @default(0)
+  errorCount     Int   @default(0)
+  lastError      String?
+  
+  // Controle
+  priority       Int   @default(0)  // Maior = mais importante (para failover)
+  weight         Int   @default(1)  // Peso para load_balance
+  lastUsed       DateTime @default(now())
+  
+  createdAt      DateTime @default(now())
+}
+
+// =============================================================================
+// MODELO: KnowledgeBase (Base de Conhecimento RAG)
+// =============================================================================
+model KnowledgeBase {
+  id         String   @id @default(uuid())
+  merchantId String
+  merchant   Merchant @relation(fields: [merchantId], references: [id])
+  
+  // Conteúdo
+  title      String?
+  content    String
+  source     String?  // manual, pdf, url, etc.
+  
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+// =============================================================================
+// MODELO: InteractionLog (Histórico de Conversas)
+// =============================================================================
+model InteractionLog {
+  id         String   @id @default(uuid())
+  merchantId String
+  merchant   Merchant @relation(fields: [merchantId], references: [id])
+  
+  // Dados da Interação
+  sender     String   // Telefone do cliente
+  question   String
+  answer     String
+  
+  // Métricas
+  tokensUsed Int      @default(0)
+  model      String?
+  provider   String?
+  
+  // Análise
+  sentiment  String?  // positive, neutral, negative
+  intent     String?
+  
+  createdAt  DateTime @default(now())
+}
+
+// =============================================================================
+// MODELO: Appointment (Agendamentos)
+// =============================================================================
+model Appointment {
+  id              String    @id @default(uuid())
+  merchantId      String
+  
+  // Dados do Cliente
+  clientName      String
+  clientPhone     String
+  
+  // Dados do Agendamento
+  date            DateTime
+  duration        Int       @default(30) // Minutos
+  service         String
+  status          String    @default("pending") // pending, confirmed, cancelled, completed, no_show
+  notes           String?
+  
+  // Confirmação
+  confirmedBy     String?
+  confirmedAt     DateTime?
+  
+  // Lembretes
+  reminderSent24h Boolean   @default(false)
+  reminderSent2h  Boolean   @default(false)
+  
+  // Integração Calendário
+  externalEventId   String?
+  externalEventUrl  String?
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+// =============================================================================
+// MODELO: MessageTemplate (Templates de Mensagens)
+// =============================================================================
+model MessageTemplate {
+  id          String    @id @default(uuid())
+  merchantId  String
+  key         String    // welcome, follow_up, appointment_confirm, etc.
+  name        String
+  content     String
+  category    String    @default("custom") // welcome, follow_up, appointment, sale, support, custom
+  variables   Json?     // ["nome", "empresa", "data"]
+  isActive    Boolean   @default(true)
+  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  @@unique([merchantId, key])
+}
+
+// =============================================================================
+// MODELO: CalendarConfig (Configuração de Calendário)
+// =============================================================================
+model CalendarConfig {
+  id              String    @id @default(uuid())
+  merchantId      String    @unique
+  
+  provider        String    @default("google") // google, outlook
+  accessToken     String
+  refreshToken    String
+  expiresAt       DateTime
+  calendarId      String    @default("primary")
+  
+  syncEnabled     Boolean   @default(true)
+  autoConfirm     Boolean   @default(false)
+  defaultDuration Int       @default(30)
+  workingHours    Json?     // { start: "09:00", end: "18:00", days: [1,2,3,4,5] }
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+// =============================================================================
+// MODELO: SaleTracking (Rastreamento de Vendas)
+// =============================================================================
+model SaleTracking {
+  id            String    @id @default(uuid())
+  merchantId    String
+  
+  customerPhone String
+  customerName  String?
+  product       String?
+  value         Float     @default(0)
+  status        String    @default("pending") // pending, confirmed, cancelled
+  
+  source        String    @default("ai") // ai, human
+  conversationId String?
+  
+  confirmedAt   DateTime?
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  @@index([merchantId, status])
+  @@index([merchantId, createdAt])
+}
+
+// =============================================================================
+// MODELO: DripCampaign (Sequências de Mensagens)
+// =============================================================================
+model DripCampaign {
+  id            String    @id @default(uuid())
+  merchantId    String
+  
+  name          String
+  description   String?
+  status        String    @default("draft") // draft, active, paused, completed
+  
+  // Segmentação
+  targetSegment String?   // all, new_leads, inactive, etc.
+  
+  // Passos da sequência
+  steps         Json?     // [{ day: 1, template: "welcome", delay: 0 }, ...]
+  
+  // Métricas
+  totalSent     Int       @default(0)
+  totalOpened   Int       @default(0)
+  totalClicked  Int       @default(0)
+  
+  startsAt      DateTime?
+  endsAt        DateTime?
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  @@index([merchantId, status])
+}
+
+// =============================================================================
+// MODELO: AutomationTrigger (Gatilhos Automáticos)
+// =============================================================================
+model AutomationTrigger {
+  id            String    @id @default(uuid())
+  merchantId    String
+  
+  name          String
+  description   String?
+  isActive      Boolean   @default(true)
+  
+  // Condição
+  triggerType   String    // inactivity, keyword, date, event
+  triggerConfig Json?     // { days: 3, keywords: ["preço", "valor"] }
+  
+  // Ação
+  actionType    String    // send_message, tag, notify, webhook
+  actionConfig  Json?     // { template: "follow_up", message: "..." }
+  
+  // Métricas
+  triggerCount  Int       @default(0)
+  lastTriggered DateTime?
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  @@index([merchantId, isActive])
+}
+
+// =============================================================================
+// MODELO: WebhookConfig (Configuração de Webhooks)
+// =============================================================================
+model WebhookConfig {
+  id            String    @id @default(uuid())
+  merchantId    String
+  
+  name          String
+  url           String
+  secret        String?
+  isActive      Boolean   @default(true)
+  
+  // Eventos
+  events        Json?     // ["new_message", "sale", "appointment"]
+  
+  // Headers customizados
+  headers       Json?
+  
+  // Métricas
+  totalSent     Int       @default(0)
+  totalFailed   Int       @default(0)
+  lastSentAt    DateTime?
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  @@index([merchantId, isActive])
+}
+
+// =============================================================================
+// MODELO: PasswordReset (Tokens de Recuperação de Senha)
+// =============================================================================
+model PasswordReset {
+  id          String    @id @default(uuid())
+  
+  email       String
+  token       String    @unique
+  userType    String    // admin, reseller, merchant
+  
+  used        Boolean   @default(false)
+  expiresAt   DateTime
+  
+  createdAt   DateTime  @default(now())
+  
+  @@index([email, token])
+}
+
+// =============================================================================
+// MODELO: ClientMemory (Memória de Longo Prazo - ELITE)
+// =============================================================================
+model ClientMemory {
+  id            String    @id @default(uuid())
+  merchantId    String
+  customerPhone String
+  
+  // Dados armazenados
+  customerName  String?
+  preferences   Json?     // ["prefere manhã", "pagamento PIX"]
+  purchaseHistory Json?   // [{ product, date, value }]
+  
+  // Embeddings para busca semântica
+  embedding     String?   // Vector embedding (JSON)
+  
+  // Estatísticas
+  totalInteractions Int   @default(0)
+  totalPurchases    Int   @default(0)
+  totalValue        Float @default(0)
+  
+  firstContact DateTime?
+  lastContact  DateTime?
+  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  @@unique([merchantId, customerPhone])
+  @@index([merchantId])
+}
+
+// =============================================================================
+// MODELO: FiscalConfig (Configuração de Nota Fiscal - NFS-e)
+// =============================================================================
+model FiscalConfig {
+  id              String    @id @default(uuid())
+  
+  // Dono da configuração (pode ser Reseller ou Merchant)
+  ownerType       String    // reseller, merchant
+  ownerId         String    // ID do Reseller ou Merchant
+  
+  // === ATIVAÇÃO ===
+  nfseEnabled     Boolean   @default(false)  // Toggle ativar/desativar
+  autoIssue       Boolean   @default(true)   // Emitir automaticamente no pagamento
+  
+  // === DADOS DA EMPRESA ===
+  corporateName   String?   // Razão Social
+  tradeName       String?   // Nome Fantasia
+  cnpj            String?   // CNPJ (apenas números)
+  municipalRegistration String? // Inscrição Municipal
+  taxRegime       String    @default("simples_nacional") // simples_nacional, lucro_presumido, lucro_real
+  
+  // === ENDEREÇO ===
+  addressStreet   String?
+  addressNumber   String?
+  addressComplement String?
+  addressDistrict String?   // Bairro
+  addressCity     String?   // Cidade
+  addressState    String?   // UF (2 letras)
+  addressZipCode  String?   // CEP
+  
+  // === CONTATO ===
+  email           String?   // Email para envio da NFS-e
+  phone           String?   // Telefone
+  
+  // === CONFIGURAÇÃO DE SERVIÇO ===
+  serviceCode     String?   // Código do serviço (LC 116) - ex: "1.05"
+  serviceDescription String? // Descrição padrão do serviço
+  aliquotIss      Float     @default(5.0) // Alíquota ISS (%)
+  
+  // === INTEGRAÇÃO (API DE TERCEIROS) ===
+  // Suporte a múltiplos provedores: FOCUS_NFE, NFE_IO, WEBMANIA
+  provider        String    @default("FOCUS_NFE") // FOCUS_NFE, NFE_IO, WEBMANIA
+  apiToken        String?   // Token de API (criptografado)
+  apiSecret       String?   // Secret de API (criptografado)
+  apiEnvironment  String    @default("production") // production, homologation
+  
+  // === CERTIFICADO DIGITAL (para provedores que exigem) ===
+  certificatePfx  String?   // Certificado A1 em base64
+  certificatePass String?   // Senha do certificado (criptografada)
+  
+  // === CONFIGURAÇÕES ADICIONAIS ===
+  deductionsEnabled Boolean @default(false)  // Permitir deduções
+  deductionsPercent Float   @default(0)      // Percentual de dedução padrão
+  retentionIssEnabled Boolean @default(false) // Retenção de ISS
+  retentionIssPercent Float  @default(0)     // Percentual de retenção
+  
+  // === TOMADOR PADRÃO (para notas sem cliente específico) ===
+  defaultTakerCnpj    String? // CNPJ/CPF do tomador padrão
+  defaultTakerName    String? // Nome do tomador padrão
+  defaultTakerEmail   String? // Email do tomador padrão
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  @@unique([ownerType, ownerId])
+  @@index([ownerType, ownerId])
+}
+
+// =============================================================================
+// MODELO: Invoice (Notas Fiscais Emitidas)
+// =============================================================================
+model Invoice {
+  id              String    @id @default(uuid())
+  
+  // Dono da nota
+  ownerType       String    // reseller, merchant
+  ownerId         String    // ID do Reseller ou Merchant
+  
+  // === DADOS DA NOTA ===
+  invoiceNumber   String?   // Número da NFS-e
+  verificationCode String?  // Código de verificação
+  invoiceUrl      String?   // URL para visualização da nota
+  pdfUrl          String?   // URL do PDF
+  xmlUrl          String?   // URL do XML
+  
+  // === VALORES ===
+  serviceValue    Float     // Valor dos serviços
+  deductionValue  Float     @default(0) // Valor das deduções
+  issValue        Float     @default(0) // Valor do ISS
+  issRetained     Float     @default(0) // ISS retido
+  netValue        Float     // Valor líquido
+  totalValue      Float     // Valor total da nota
+  
+  // === TOMADOR (CLIENTE) ===
+  takerType       String    @default("cpf") // cpf, cnpj, estrangeiro
+  takerDocument   String?   // CPF/CNPJ do tomador
+  takerName       String?   // Nome/Razão Social do tomador
+  takerEmail      String?   // Email do tomador
+  takerPhone      String?   // Telefone do tomador
+  takerAddress    String?   // Endereço completo do tomador
+  takerCity       String?   // Cidade do tomador
+  takerState      String?   // UF do tomador
+  
+  // === SERVIÇO ===
+  serviceCode     String?   // Código do serviço
+  serviceDescription String? // Descrição do serviço
+  competenceDate  DateTime? // Data de competência
+  
+  // === PAGAMENTO ASSOCIADO ===
+  paymentId       String?   // ID do pagamento (Stripe)
+  subscriptionId  String?   // ID da assinatura
+  paymentAmount   Float?    // Valor do pagamento original
+  paymentMethod   String?   // Método de pagamento
+  
+  // === STATUS ===
+  status          String    @default("pending") // pending, processing, issued, cancelled, error
+  issuedAt        DateTime? // Data de emissão
+  cancelledAt     DateTime? // Data de cancelamento
+  cancelReason    String?   // Motivo do cancelamento
+  
+  // === INTEGRAÇÃO ===
+  provider        String?   // Provedor usado (FOCUS_NFE, NFE_IO, etc)
+  providerId      String?   // ID retornado pelo provedor
+  providerResponse Json?    // Resposta completa do provedor
+  
+  // === ERRO ===
+  errorMessage    String?   // Mensagem de erro se falhou
+  retryCount      Int       @default(0) // Tentativas de reenvio
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  @@index([ownerType, ownerId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([paymentId])
+}
+
+// =============================================================================
+// MODELO: InvoiceLog (Histórico de ações de notas fiscais)
+// =============================================================================
+model InvoiceLog {
+  id          String    @id @default(uuid())
+  invoiceId   String?
+  
+  action      String    // created, issued, cancelled, resent, error
+  details     String?   // JSON ou descrição
+  userId      String?   // Usuário que executou a ação
+  userType    String?   // admin, reseller, merchant, system
+  
+  createdAt   DateTime  @default(now())
+  
+  @@index([invoiceId])
+  @@index([createdAt])
+}
+
+// =============================================================================
+// MODELO: StudyGroup (Grupos do WhatsApp para Estudo da Empresa)
+// =============================================================================
+model StudyGroup {
+  id            String    @id @default(uuid())
+  merchantId    String
+  
+  // Dados do grupo
+  groupId       String    // ID do grupo no WhatsApp (ex: 5511999999999-1234567890@g.us)
+  groupName     String    // Nome do grupo
+  groupPicture  String?   // URL da foto do grupo
+  
+  // Status do estudo
+  status        String    @default("pending") // pending, studying, completed, error
+  studiedAt     DateTime? // Quando foi estudado
+  messageCount  Int       @default(0) // Quantas mensagens foram analisadas
+  
+  // Resultado do estudo
+  generatedKnowledge String? // Conhecimento extraído (JSON)
+  confidence    Float     @default(0) // 0-1 - confiança do estudo
+  
+  // Configuração
+  autoUpdate    Boolean   @default(false) // Atualizar conhecimento automaticamente
+  lastSyncAt    DateTime? // Última sincronização
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  @@unique([merchantId, groupId])
+  @@index([merchantId])
+  @@index([status])
+}
+
+// =============================================================================
+// MODELO: AutoSetup (Configuração Automática "Botão Mágico")
+// =============================================================================
+model AutoSetup {
+  id              String    @id @default(uuid())
+  merchantId      String    @unique
+  
+  // Status
+  status          String    @default("pending") // pending, running, completed, error
+  startedAt       DateTime?
+  completedAt     DateTime?
+  
+  // Etapas (cada uma pode ser true/false/null)
+  stepGroupsLoaded    Boolean @default(false) // Grupos carregados
+  stepGroupsStudied   Boolean @default(false) // Grupos estudados
+  stepKnowledgeCreated Boolean @default(false) // Conhecimento gerado
+  stepAIConfigured    Boolean @default(false) // IA configurada
+  stepPromptsGenerated Boolean @default(false) // Prompts gerados
+  stepTriggersCreated Boolean @default(false) // Triggers criados
+  stepWelcomeSet      Boolean @default(false) // Mensagem de boas-vindas
+  stepTested          Boolean @default(false) // Teste realizado
+  
+  // Resultado
+  totalMessagesAnalyzed Int   @default(0)
+  totalKnowledgeItems   Int   @default(0)
+  confidenceScore       Float @default(0)
+  errorMessage          String?
+  
+  // Grupos selecionados
+  selectedGroups   Json?   // [{ groupId, groupName }]
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  @@index([merchantId])
+  @@index([status])
+}
+
+// =============================================================================
+// MODELO: PlanFeatureConfig (Configuração de Features por Plano)
+// =============================================================================
+model PlanFeatureConfig {
+  id          String    @id @default(uuid())
+  planId      String    @unique
+  
+  // Features ativadas (JSON com todas as features e seus estados)
+  features    Json?     // { "INTERACTIVE_MESSAGES": true, "ROI_DASHBOARD": false, ... }
+  
+  // Limites do plano
+  maxMessages     Int @default(5000)
+  maxTokens       Int @default(50000)
+  maxInstances    Int @default(1)
+  maxStudyGroups  Int @default(1)    // Máximo de grupos para estudo
+  
+  // Módulos ativados
+  modules     Json?     // { "ESSENTIAL": true, "SALES_PRO": true, ... }
+  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  @@index([planId])
+}

@@ -1,0 +1,32 @@
+================================================================================
+ORQUESTRAÇÃO DE INFRAESTRUTURA FINAL - SAASWPP (ESTRUTURA OTIMIZADA)
+================================================================================
+
+Este documento descreve a nova topologia de rede simplificada para o Coolify.
+
+--------------------------------------------------------------------------------
+1. TOPOLOGIA DE REDE
+--------------------------------------------------------------------------------
+
+NÓ A: SERVIDOR CÉREBRO (8GB RAM)
+IP Privado: 192.168.88.5
+Localização: /deploy/servidor-a-cerebro/
+Serviços: App Principal (Node/Vite), PostgreSQL, n8n.
+
+NÓ B: SERVIDOR TRABALHADOR (16GB RAM)
+IP Privado: 192.168.88.6
+Localização: /deploy/servidor-b-trabalhador/
+Serviços: Evolution API (WhatsApp), Redis (Cache).
+
+--------------------------------------------------------------------------------
+2. PASSOS DE IMPLEMENTAÇÃO NO COOLIFY
+--------------------------------------------------------------------------------
+
+PASSO 1: CONFIGURAR SERVIDOR B (TRABALHADOR)
+1. Crie um novo serviço no Coolify usando o Docker Compose em /deploy/servidor-b-trabalhador/
+2. Defina as variáveis de ambiente (EVOLUTION_API_KEY, REDIS_PASSWORD).
+
+PASSO 2: CONFIGURAR SERVIDOR A (CÉREBRO)
+1. Crie um novo serviço no Coolify usando o Docker Compose em /deploy/servidor-a-cerebro/
+2. Aponte as variáveis REDIS_HOST e EVOLUTION_API_URL para o IP do Servidor B.
+3. Configure o domínio principal no Coolify apontando para a porta 3000.

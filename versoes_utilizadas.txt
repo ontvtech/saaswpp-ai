@@ -1,0 +1,58 @@
+================================================================================
+SaaSWpp - VERSÕES UTILIZADAS (STACK DE ELITE)
+================================================================================
+
+Este documento lista as versões exatas das tecnologias utilizadas no projeto
+para garantir reprodutibilidade e estabilidade em produção.
+
+--------------------------------------------------------------------------------
+1. INFRAESTRUTURA E CONTAINERS
+--------------------------------------------------------------------------------
+- Docker: 24.0+
+- Docker Compose: 2.20+
+- Coolify: v4.x (Recomendado para orquestração)
+- PostgreSQL: 15-alpine (ou 16-alpine para o core)
+- Redis: 7-alpine
+- n8n: n8nio/n8n:latest
+- Evolution API: atendai/evolution-api:latest (ou v2.1.0-production)
+
+--------------------------------------------------------------------------------
+2. BACKEND (NODE.JS)
+--------------------------------------------------------------------------------
+- Node.js: v20.x (LTS)
+- Express: ^4.21.2
+- Prisma: ^6.4.1 (@prisma/client)
+- @google/genai: ^0.1.2 (SDK Oficial Gemini)
+- Stripe: ^17.6.0
+- Systeminformation: ^5.25.11 (Telemetria)
+- Body-parser: ^1.20.3
+- tsx: ^4.19.3 (Execução TypeScript)
+
+--------------------------------------------------------------------------------
+3. FRONTEND (REACT + VITE)
+--------------------------------------------------------------------------------
+- React: ^18.3.1
+- React DOM: ^18.3.1
+- Vite: ^5.4.2
+- Tailwind CSS: ^3.4.1 (com tailwindcss-animate)
+- Lucide React: ^0.344.0 (Ícones)
+- Motion (Framer Motion): ^12.4.7 (Animações)
+- Recharts: ^3.7.0 (Gráficos de Telemetria)
+- Zustand: ^5.0.3 (Gerenciamento de Estado)
+- clsx: ^2.1.1
+- tailwind-merge: ^2.6.0
+
+--------------------------------------------------------------------------------
+4. FERRAMENTAS DE DESENVOLVIMENTO (DEV DEPENDENCIES)
+--------------------------------------------------------------------------------
+- TypeScript: ^5.5.3
+- ESLint: ^9.9.0
+- PostCSS: ^8.4.35
+- Autoprefixer: ^10.4.18
+- @types/react: ^18.3.3
+- @types/node: ^22.13.5
+- @types/express: ^5.0.0
+
+================================================================================
+Sistemas online. Stack validada e homologada para operação em alta escala.
+================================================================================

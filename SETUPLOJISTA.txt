@@ -1,0 +1,234 @@
+DOCUMENTAÇÃO TÉCNICA - PAINEL DO LOJISTA (MERCHANT)
+SISTEMA: SaaSWPP AI (White-Label)
+VERSÃO: 1.0.0-beta
+DATA: 02/03/2026
+
+---
+
+1. VISÃO GERAL DO PAINEL DO LOJISTA
+
+1.1. Propósito do Módulo
+O Painel do Lojista (Merchant Console) é a interface operacional destinada ao cliente final do SaaS (donos de clínicas, oficinas, lojas, etc.). Seu objetivo é centralizar a gestão do atendimento automatizado via WhatsApp, permitindo configuração da IA, monitoramento de métricas e intervenção humana quando necessário.
+
+1.2. Público-Alvo
+Pequenas e médias empresas (SMBs) que utilizam WhatsApp como canal primário de vendas e suporte.
+
+1.3. Tecnologias Envolvidas
+- Frontend: React 18+, Tailwind CSS, Lucide Icons.
+- Backend (Simulado/Core): Node.js, Express.
+- Inteligência Artificial: Google Gemini (Modelos Flash Lite/Pro) via @google/genai SDK.
+- Mensageria: Evolution API (Wrapper para WhatsApp Multi-Device).
+- Banco de Dados: PostgreSQL (Sharded por Tenant) + Redis (Cache/Filas).
+
+---
+
+2. AUTENTICAÇÃO E ACESSO
+
+2.1. Fluxo de Login
+- Padrão: Credenciais (E-mail/Senha).
+- Mecanismo: Autenticação via JWT (JSON Web Tokens) com tempo de expiração configurável (padrão 24h).
+- Rotação: Refresh Tokens armazenados em Cookies HttpOnly seguros.
+
+2.2. Controle de Permissões (RBAC)
+- Role: `MERCHANT` (Nível 2).
+- Escopo: Acesso restrito aos dados do próprio Tenant ID. Isolamento lógico garantido via middleware de API.
+
+2.3. Segurança
+- Senhas: Hash via Argon2 ou Bcrypt.
+- Sessão: Invalidação remota de sessões ativas em caso de suspeita de fraude.
+
+---
+
+3. DASHBOARD INICIAL
+
+3.1. Cards de Resumo (KPIs)
+- Atendimentos Totais: Contagem de sessões iniciadas no período.
+- Taxa de Conversão: % de atendimentos que resultaram em venda ou agendamento.
+- Tempo Médio de Resposta (TMR): Latência média entre mensagem do cliente e resposta da IA.
+- Taxa de Automação: % de mensagens respondidas pela IA sem intervenção humana (Target: >90%).
+
+3.2. Gráficos e Visualizações
+- Volume por Hora: Histograma para identificar horários de pico.
+- Funil de Vendas: Visualização de Leads -> Em Negociação -> Fechado.
+
+3.3. Alertas em Tempo Real (Smart Box)
+- Feed de atividades críticas: Agendamentos pendentes de aprovação, intenções de compra detectadas e falhas de conexão.
+
+3.4. Atividade da IA
+- Log stream das últimas interações com análise de sentimento (Positivo/Neutro/Negativo).
+
+---
+
+4. CONFIGURAÇÕES DA IA (CÉREBRO)
+
+4.1. Personalidade (Persona)
+- Definição do "System Instruction": Nome do bot, tom de voz (Formal, Empático, Vendedor), e diretrizes éticas.
+- Gatilhos: Definição de saudação inicial e mensagem de encerramento/inatividade.
+
+4.2. Conhecimento do Negócio (RAG - Retrieval Augmented Generation)
+- Ingestão de Dados: Upload de arquivos (PDF, DOCX, TXT) contendo manuais, cardápios ou tabelas de preço.
+- Vetorização: Processamento dos textos em embeddings para busca semântica durante o chat.
+- Contexto Dinâmico: Injeção automática de horário de funcionamento e catálogo de produtos no prompt.
+
+4.3. Regras de Atendimento
+- Horário de Atuação: Definição de janelas onde a IA opera (ex: 24/7 ou apenas horário comercial).
+- Hand-off: Configuração de palavras-chave que forçam a transferência para humano (ex: "falar com atendente", "processo jurídico").
+
+---
+
+5. AGENDAMENTO INTELIGENTE (TRIANGULAÇÃO)
+
+5.1. Configuração de Agenda
+- Setup de Slots: Definição de duração de serviços (ex: 30min, 1h) e capacidade simultânea.
+
+5.2. Fluxo de Triangulação (Lógica de 3 Pontos)
+1. Cliente solicita horário via WhatsApp.
+2. IA verifica disponibilidade preliminar e "Pausa" a conversa.
+3. Sistema envia Alerta (Push/WPP) para o Lojista: "Cliente X quer agendar às 14h. Aprovar?".
+4. Lojista responde via Painel ou WPP:
+   - Opção 1 (Confirmar): IA retorna ao cliente confirmando.
+   - Opção 2 (Sugerir): Lojista propõe novo horário -> IA negocia com cliente.
+   - Opção 3 (Recusar): IA informa indisponibilidade.
+
+5.3. Automação
+- Lembretes: Disparo automático de confirmação 24h e 2h antes do evento.
+- Tag de Controle: Uso interno da tag `[SCHEDULE_REQUEST]` para sinalizar intenção ao backend.
+
+---
+
+6. CAÇADOR PREDITIVO (MÓDULO DE REATIVAÇÃO)
+
+6.1. Radar de Clientes Frios
+- Algoritmo: Varredura no banco de dados por clientes sem interação há X dias (configurável).
+- Ação: Disparo de mensagem de reativação ("Oi [Nome], faz tempo que não te vemos! Temos uma oferta...").
+
+6.2. Follow-up de Orçamentos (Carrinho Abandonado)
+- Monitoramento de sessões onde houve cotação de preço mas sem fechamento (tag `[PRICE_QUOTED]` sem `[SALE_CLOSED]`).
+- Sequência: Mensagem automática após 2h e 24h perguntando se restou dúvida.
+
+6.3. Aniversariantes
+- Job diário (Cron) que verifica datas de nascimento e envia cupom personalizado.
+
+---
+
+7. VENDAS E FECHAMENTO COM PIX
+
+7.1. Venda por Indução (Serviços Variáveis)
+- Fluxo para orçamentos complexos onde a IA explica o valor agregado antes de dar o preço (Taxa de Diagnóstico).
+
+7.2. PIX Signal (Automação Financeira)
+- Geração: IA solicita criação de cobrança ao backend.
+- Payload: Envio de "Copia e Cola" no chat.
+- Monitoramento: Webhook do gateway de pagamento (Asaas/Stripe) informa status.
+- Cobrança: Se não pago em 10min, IA envia lembrete suave.
+- Tag de Controle: `[PIX_SIGNAL_REQUEST]`.
+
+7.3. Alertas de Venda Quente
+- Notificação push imediata ao lojista: "Venda de R$ 150,00 realizada para Cliente Y".
+
+---
+
+8. GESTÃO DE CRISES (MODO NINJA)
+
+8.1. Detector de Reclamação
+- Análise de Sentimento em tempo real em todas as mensagens recebidas.
+- Score Negativo: Gatilho imediato para `[HUMAN_HANDOFF]`.
+- Ação: IA pede desculpas padrão e alerta o suporte humano com prioridade alta.
+
+8.2. Detector de Pedido de Humano
+- Identificação de intenção explícita ("quero falar com gente", "atendente").
+- Ação: Pausa imediata do bot e sinalização visual no painel "Aguardando Humano".
+
+---
+
+9. RELATÓRIOS E ESTATÍSTICAS
+
+9.1. Métricas de Negócio
+- Ticket Médio: Valor total vendas / número de vendas.
+- CAC (Custo por Aquisição): Estimado baseada em campanhas ativas.
+
+9.2. Métricas Técnicas
+- Consumo de Tokens: Monitoramento de uso da API Gemini para controle de custos.
+- Latência de Rede: Tempo de resposta da Evolution API.
+
+9.3. Exportação
+- Formatos: PDF (Relatório Executivo) e CSV (Dados Brutos).
+- Agendamento: Envio automático de relatório semanal por e-mail.
+
+---
+
+10. GESTÃO DE EQUIPE
+
+10.1. Cadastro de Atendentes
+- Criação de usuários secundários vinculados ao Tenant.
+- Permissões: Apenas Chat, Apenas Agendamento, ou Admin da Loja.
+
+10.2. Horários
+- Definição de turnos de trabalho para notificações de alerta.
+
+---
+
+11. ALERTAS EM TEMPO REAL
+
+11.1. Tipos de Eventos
+- `SCHEDULE_PENDING`: Agendamento aguardando aprovação.
+- `SENTIMENT_NEGATIVE`: Cliente irritado.
+- `SALE_SUCCESS`: Pagamento confirmado.
+- `BOT_OFFLINE`: Queda de conexão com WhatsApp.
+
+11.2. Canais de Entrega
+- Notificação Push (Web/Mobile).
+- Mensagem no WhatsApp do Lojista (via bot de sistema).
+- E-mail (para relatórios e alertas críticos).
+
+---
+
+12. FINANCEIRO DO LOJISTA
+
+12.1. Assinatura SaaS
+- Gestão do plano contratado (Start, Pro, Enterprise).
+- Visualização de faturas e método de pagamento (Cartão/Boleto).
+
+12.2. Integração Stripe/Asaas
+- Split de pagamentos (se aplicável no modelo de revenda).
+
+---
+
+13. CONEXÃO WHATSAPP
+
+13.1. Gerenciamento de Instância
+- Integração via Evolution API.
+- Exibição de QR Code em tempo real (WebSocket).
+- Status: `CONNECTED`, `DISCONNECTED`, `PAIRING`.
+
+13.2. Live Chat (Espelho)
+- Interface para o lojista ver as conversas em tempo real e assumir o controle (enviar mensagem manual), pausando a IA temporariamente.
+
+---
+
+14. CONFIGURAÇÕES DA CONTA
+
+14.1. Perfil
+- Dados cadastrais (CNPJ, Endereço, Telefone).
+- Segurança: Alteração de senha e 2FA.
+
+14.2. Integrações
+- Webhooks: URLs para notificar sistemas externos sobre vendas/leads.
+- Google Calendar: Sincronização bidirecional de agenda.
+
+---
+
+15. CONSIDERAÇÕES TÉCNICAS ADICIONAIS
+
+15.1. APIs Externas
+- **Google Gemini:** Motor de inferência (Flash Lite para velocidade, Pro para raciocínio complexo).
+- **Stripe:** Processamento de pagamentos e assinaturas.
+- **Evolution API:** Gateway de comunicação com WhatsApp.
+
+15.2. Infraestrutura de Dados
+- **Redis:** Utilizado para cache de contexto de conversa (Short-Term Memory) e filas de jobs (Bull) para disparos de broadcast.
+- **PostgreSQL:** Armazenamento persistente (Long-Term Memory), logs de auditoria e configurações.
+
+15.3. Segurança
+- Criptografia AES-256 para tokens de sessão do WhatsApp.
+- Sanitização de inputs para prevenção de XSS/SQL Injection.

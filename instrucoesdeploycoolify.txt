@@ -1,0 +1,92 @@
+================================================================================
+SaaSWpp - INSTRUÇÕES DE DEPLOY NO COOLIFY (ARQUITETURA DE ELITE)
+================================================================================
+
+Este documento descreve o processo exato para implantar a arquitetura de dois nós
+(8GB Core e 16GB Gateway) utilizando o Coolify.
+
+--------------------------------------------------------------------------------
+1. PREPARAÇÃO DA INFRAESTRUTURA FÍSICA
+--------------------------------------------------------------------------------
+Você precisará de dois servidores (VPS ou Bare Metal) na mesma rede local (VPC)
+ou conectados via VPN (ex: WireGuard/Tailscale) para garantir latência < 1ms.
+
+- Nó 1 (Core): 8GB RAM, 4 vCPUs (ex: IP 10.0.0.2)
+- Nó 2 (Gateway): 16GB RAM, 8 vCPUs (ex: IP 10.0.0.3)
+
+Instale o Coolify no Nó 1 (ou em um nó de gerência separado). O Coolify gerenciará
+ambos os servidores. Adicione o Nó 2 como um "Server" no painel do Coolify.
+
+--------------------------------------------------------------------------------
+2. CONFIGURAÇÃO DO NÓ 8GB (CORE - DADOS E CACHE)
+--------------------------------------------------------------------------------
+Este nó hospedará o PostgreSQL, Redis e n8n.
+
+1. No Coolify, vá em "Projects" -> "Add New Resource" -> "Docker Compose".
+2. Selecione o servidor de 8GB.
+3. Cole o conteúdo do arquivo `deploy/node-8gb-core/docker-compose.yml`.
+4. Preencha as variáveis de ambiente (Environment Variables):
+   - POSTGRES_USER=saas_admin
+   - POSTGRES_PASSWORD=senha_super_segura
+   - POSTGRES_DB=saaswpp_db
+   - REDIS_PASSWORD=senha_redis_segura
+   - N8N_PORT=5678
+   - N8N_ENCRYPTION_KEY=chave_n8n
+5. Inicie o recurso (Deploy).
+
+--------------------------------------------------------------------------------
+3. CONFIGURAÇÃO DO NÓ 16GB (GATEWAY - APLICAÇÃO E WHATSAPP)
+--------------------------------------------------------------------------------
+Este nó hospedará o Backend Node.js (SaaSWpp) e a Evolution API.
+
+1. No Coolify, vá em "Projects" -> "Add New Resource" -> "Docker Compose".
+2. Selecione o servidor de 16GB.
+3. Cole o conteúdo do arquivo `deploy/node-16gb-gateway/docker-compose.yml`.
+4. Preencha as variáveis de ambiente (Environment Variables):
+   - POSTGRES_HOST=10.0.0.2 (IP do Nó 8GB)
+   - POSTGRES_USER=saas_admin
+   - POSTGRES_PASSWORD=senha_super_segura
+   - POSTGRES_DB=saaswpp_db
+   - REDIS_HOST=10.0.0.2 (IP do Nó 8GB)
+   - REDIS_PASSWORD=senha_redis_segura
+   - EVOLUTION_API_PORT=8080
+   - EVOLUTION_API_KEY=chave_mestra_evolution
+   - APP_URL=https://seu-dominio.com
+   - STRIPE_SECRET_KEY=sua_chave_stripe
+   - STRIPE_WEBHOOK_SECRET=seu_webhook_secret
+   - VITE_STRIPE_PUBLIC_KEY=sua_chave_publica_stripe
+   - GEMINI_API_KEY=sua_chave_gemini
+   - JWT_SECRET=chave_jwt_segura
+5. IMPORTANTE (TELEMETRIA): Para que o `systeminformation` leia os dados reais
+   do servidor host (e não apenas do container), você precisa adicionar um
+   volume extra no `docker-compose.yml` do app:
+   
+   volumes:
+     - /proc:/host/proc:ro
+     
+   E no código (se necessário configurar o SI_HOST_PROC):
+   Environment:
+     - SI_HOST_PROC=/host/proc
+
+6. Inicie o recurso (Deploy).
+
+--------------------------------------------------------------------------------
+4. CONFIGURAÇÃO DE DOMÍNIOS E SSL
+--------------------------------------------------------------------------------
+1. No Coolify, vá nas configurações do serviço `app` (no Nó 16GB).
+2. Adicione o seu domínio (ex: https://app.saaswpp.com).
+3. O Coolify gerará automaticamente o certificado SSL via Let's Encrypt.
+4. Repita para a Evolution API (ex: https://api.saaswpp.com) se desejar acesso
+   externo direto (não recomendado por segurança, prefira acesso interno).
+
+--------------------------------------------------------------------------------
+5. CHECKLIST FINAL DE PRODUÇÃO
+--------------------------------------------------------------------------------
+[ ] O Backend (16GB) consegue pingar o Banco de Dados (8GB)?
+[ ] O Webhook da Stripe está configurado apontando para https://app.saaswpp.com/api/webhooks/stripe?
+[ ] A chave da Evolution API no .env bate com a configurada no container?
+[ ] O painel Admin mostra a telemetria correta (CPU/RAM)?
+[ ] O arquivo combined.log está sendo gerado e visível no terminal do Admin?
+
+Sistemas online. Bem-vindo ao nível Enterprise.
+================================================================================

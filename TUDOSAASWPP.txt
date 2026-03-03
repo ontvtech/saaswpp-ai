@@ -1,0 +1,181 @@
+DOCUMENTAÇÃO MESTRE DO SISTEMA - SaaSWPP AI
+VERSÃO DO DOCUMENTO: 1.0.0
+DATA DE GERAÇÃO: 02/03/2026
+ESTADO ATUAL: Frontend Completo com Mocking Avançado (Ready for Backend Integration)
+
+==============================================================================
+1. VISÃO GERAL E ARQUITETURA
+==============================================================================
+
+1.1. PROPÓSITO
+O SaaSWPP é uma plataforma White-Label de automação de WhatsApp via IA, projetada para ser revendida por agências (Revendedores) para pequenos e médios negócios (Lojistas). O sistema utiliza LLMs (Google Gemini) para atendimento, vendas e agendamento.
+
+1.2. STACK TECNOLÓGICO
+- Frontend: React 18, Vite, Tailwind CSS, Lucide Icons, Recharts, Framer Motion.
+- Backend (Simulado/Planejado): Node.js (Express), WebSocket (Socket.io).
+- Banco de Dados (Simulado/Planejado): PostgreSQL (Dados relacionais), Redis (Filas BullMQ e Cache).
+- IA: Google Gemini 2.5 Flash-Lite (Alta velocidade) e Pro (Raciocínio complexo).
+- Mensageria: Evolution API (Gateway WhatsApp Multi-Device).
+
+1.3. ESTRATÉGIA DE DESENVOLVIMENTO ATUAL (CLIENT-SIDE MOCKING)
+Para viabilizar o desenvolvimento e preview sem infraestrutura pesada de backend, adotou-se uma arquitetura de "Interceptação de Requisições":
+- `src/store/useStore.ts`: Contém a função `fetchWithAuth` que intercepta chamadas `/api/*`.
+- `src/services/mockData.ts`: Centraliza todos os dados JSON estáticos.
+- `src/services/geminiService.ts`: Versão sanitizada para rodar no browser, sem dependências de Node.js (Prisma/Cron removidos).
+
+==============================================================================
+2. MÓDULO SUPER ADMIN (GOD MODE)
+==============================================================================
+
+2.1. DASHBOARD DE INFRAESTRUTURA
+- Monitoramento de CPU/RAM dos nós da Evolution API.
+- Health Check dos serviços (DB, Redis, IA).
+- Métricas globais: MRR (Receita Recorrente Mensal), Total de Revendedores, Total de Lojistas.
+
+2.2. GESTÃO DE PROMPTS GLOBAIS
+- O Admin define "Templates de Sistema" que os revendedores podem herdar.
+- Capacidade de criar, editar e excluir prompts base (ex: "Clínica Padrão", "Oficina Mecânica").
+
+2.3. GESTÃO DE CHAVES DE IA (POOL STRATEGY)
+- Estratégia de Múltiplas Chaves: O sistema suporta um array de API Keys do Gemini.
+- Rotação: A cada requisição, o sistema rotaciona a chave para distribuir a carga.
+- Failover: Se uma chave atingir o rate limit (429), o sistema tenta a próxima automaticamente.
+- Separação: Chaves de "Produção" (pagas) vs "Free Tier" (rotação agressiva).
+
+==============================================================================
+3. MÓDULO REVENDEDOR (WHITE-LABEL)
+==============================================================================
+
+3.1. PERSONALIZAÇÃO (BRANDING)
+- Configuração de Nome da Plataforma, Logo, Favicon e Cores Primárias/Secundárias.
+- Domínio personalizado (ex: `app.suaagencia.com`).
+
+3.2. GESTÃO DE TENANTS (LOJISTAS)
+- Criação de novas instâncias (Lojas).
+- Definição de Planos (Start, Pro, Enterprise) integrados ao Stripe.
+- Ações: Bloquear, Suspender, Acessar como Lojista (Impersonation).
+
+3.3. FINANCEIRO
+- Integração com Stripe Connect (simulado).
+- Configuração de Webhooks para renovação automática de assinaturas.
+
+==============================================================================
+4. MÓDULO LOJISTA (MERCHANT)
+==============================================================================
+
+4.1. DASHBOARD OPERACIONAL
+- KPIs: Atendimentos hoje, Vendas fechadas, Agendamentos pendentes.
+- Gráficos: Volume de mensagens por hora (identificação de pico).
+
+4.2. CONFIGURAÇÃO DA IA (CÉREBRO)
+- Persona: Nome do bot, tom de voz (formal/informal).
+- Base de Conhecimento (RAG): Upload de textos/PDFs com regras do negócio.
+- Gatilhos: Mensagem de saudação, mensagem de fora de horário.
+
+4.3. AGENDAMENTO (TRIANGULAÇÃO)
+- Lógica:
+  1. Cliente pede horário.
+  2. IA verifica disponibilidade (mock) e PAUSA a conversa.
+  3. Sistema envia alerta para o Lojista (App/WPP).
+  4. Lojista aprova ou sugere novo horário.
+  5. IA retoma a conversa com o cliente confirmando.
+- Tags de Controle: `[SCHEDULE_REQUEST]`.
+
+4.4. CAÇADOR PREDITIVO (PREDICTIVE HUNTER)
+- Reativação de base: Envia mensagens para clientes inativos há X dias.
+- Recuperação de carrinho: Detecta intenção de compra não finalizada.
+- Implementação Atual: Serviço `cronService.ts` existe mas é "no-op" (não executa) no frontend para evitar erros de build.
+
+4.5. MODO NINJA (GESTÃO DE CRISE)
+- Análise de Sentimento em tempo real.
+- Se sentimento < limiar ou palavras-chave ("procon", "advogado", "falar com gerente") detectadas -> Dispara `[HUMAN_HANDOFF]`.
+
+==============================================================================
+5. LÓGICA DE INTELIGÊNCIA ARTIFICIAL
+==============================================================================
+
+5.1. FLUXO DE PROCESSAMENTO
+1. Recebimento da mensagem (WhatsApp -> Evolution API -> Webhook).
+2. Recuperação de Contexto (Redis - últimas 10 mensagens).
+3. Recuperação de Conhecimento (RAG - Vector DB/Busca simples).
+4. Montagem do Prompt do Sistema (Instruções + Contexto + RAG).
+5. Chamada à API Gemini (com rotação de chaves).
+6. Pós-processamento: Detecção de Tags (`[HUMAN_HANDOFF]`, `[PIX_SIGNAL]`).
+
+5.2. EXEMPLO DE SYSTEM INSTRUCTION (GERADO DINAMICAMENTE)
+"""
+Você é a atendente virtual da [NOME_LOJA].
+Seu tom é [TOM_VOZ].
+BASE DE CONHECIMENTO:
+[CONTEUDO_RAG]
+
+REGRAS:
+- Se o cliente quiser agendar, use a tag [SCHEDULE_REQUEST].
+- Se o cliente pedir PIX, use a tag [PIX_SIGNAL_REQUEST].
+- Se o cliente estiver furioso, use a tag [HUMAN_HANDOFF].
+"""
+
+5.3. MODELOS UTILIZADOS
+- Gemini 2.5 Flash-Lite: Para respostas rápidas de saudação e dúvidas simples (Baixo custo/latência).
+- Gemini 2.5 Pro: Para negociações complexas e análise de sentimento (Maior raciocínio).
+
+==============================================================================
+6. ESTADO ATUAL DE IMPLEMENTAÇÃO (CHECKLIST)
+==============================================================================
+
+[OK] = Implementado e Funcional (Mockado ou Real)
+[WIP] = Em Progresso / Parcial
+[TODO] = Pendente para Backend Real
+
+6.1. FRONTEND / UI
+[OK] Layout Responsivo (Mobile-First) com Tailwind.
+[OK] Navegação por Abas (Admin, Revenda, Lojista).
+[OK] Dashboards com Gráficos (Recharts).
+[OK] Formulários de Configuração (IA, Revenda).
+[OK] Feedback Visual (Toasts, Loading States, Skeletons).
+
+6.2. SERVIÇOS E LÓGICA
+[OK] `useStore` com Mocking Interceptado (`fetchWithAuth`).
+[OK] `geminiService` adaptado para Frontend (sem Prisma).
+[OK] `cronService` adaptado para Frontend (No-op).
+[OK] Simulação de Latência de Rede (`mockDelay`).
+[OK] Tratamento de Erros Globais (ErrorBoundary/Try-Catch).
+
+6.3. CORREÇÕES RECENTES
+[OK] Removido erro `window.fetch` (dependências de Node no browser).
+[OK] Corrigido erro `templates.map` (dados mockados adicionados).
+[OK] Ativados botões de "Ação Rápida" no Dashboard Admin.
+
+==============================================================================
+7. DECISÕES DE DESIGN E JUSTIFICATIVAS
+==============================================================================
+
+7.1. POR QUE MOCK NO FRONTEND?
+Decisão: Simular toda a API no `useStore` e `mockData`.
+Justificativa: Permite que o ambiente de preview (que não roda Docker/Backend complexo) seja 100% navegável e testável visualmente. Garante "Zero Broken Links" na demonstração.
+
+7.2. POR QUE GEMINI?
+Decisão: Uso exclusivo do Google Gemini.
+Justificativa: Melhor relação custo/benefício (Free Tier generoso), janela de contexto grande para RAG e velocidade superior (Flash-Lite) para chatbots.
+
+7.3. SEPARAÇÃO DE SERVIÇOS
+Decisão: Criar versões "sanitizadas" de `geminiService.ts`.
+Justificativa: Bibliotecas como `@prisma/client` e `node-cron` quebram o build do Vite. A separação permite manter a lógica conceitual sem erros de runtime no navegador.
+
+==============================================================================
+8. PRÓXIMOS PASSOS SUGERIDOS
+==============================================================================
+
+8.1. CURTO PRAZO (FRONTEND REFINEMENT)
+- Implementar visualização de "Chat ao Vivo" (simulado) no painel do lojista.
+- Criar tela de "Logs do Sistema" para visualizar as ações da IA (tokens gastos, latência).
+
+8.2. MÉDIO PRAZO (BACKEND INTEGRATION)
+- Configurar servidor Express real.
+- Migrar `mockData` para PostgreSQL (Prisma Schema).
+- Implementar WebSockets para atualização real dos Dashboards.
+- Configurar filas BullMQ para o "Caçador Preditivo".
+
+8.3. INFRAESTRUTURA
+- Deploy da Evolution API em VPS.
+- Configuração de Redis para produção.
