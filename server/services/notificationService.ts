@@ -112,7 +112,7 @@ export async function notifyNewSale(data: {
   const message = `🎉 *NOVA VENDA!*
 
 📦 Cliente: ${data.merchantName}
-📧 Email: ${data.merchantEmail]
+📧 Email: ${data.merchantEmail}
 💎 Plano: ${data.planName}
 💰 Valor: R$ ${data.planPrice.toFixed(2)}
 💵 Sua comissão: R$ ${commission.toFixed(2)}
@@ -271,7 +271,7 @@ export async function notifyWelcomeReseller(data: {
   resellerName: string;
   maxTenants: number;
 }): Promise<void> {
-  const reseller = await preller.findUnique({
+  const reseller = await prisma.reseller.findUnique({
     where: { id: data.resellerId }
   });
 
