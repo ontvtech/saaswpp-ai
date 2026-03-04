@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useStore } from '../store/useStore';
+import { cn } from '../utils/cn';
 import { 
   ShieldCheck, 
   Settings, 

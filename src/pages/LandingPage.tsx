@@ -5,12 +5,7 @@ import {
   Bot, Calendar, TrendingUp, Users, Clock, Headphones, Star, ChevronDown,
   Store, Wrench, Stethoscope, Scissors, Coffee, Car, Sparkles
 } from 'lucide-react';
-import { clsx, type ClassValue } from 'clsx';
-import { twMerge } from 'tailwind-merge';
-
-function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
+import { cn } from '../utils/cn';
 
 interface LandingPageProps {
   onLogin: (view?: 'login' | 'trial') => void;
